@@ -19,7 +19,6 @@ from balance_core import (
     load_balance,
 )
 
-
 st.set_page_config(page_title="Outils comptables Streamlit", layout="wide")
 
 
@@ -45,8 +44,14 @@ def render_balance_module() -> None:
 
     if balance_n_file and balance_n1_file:
         try:
-            balance_n = load_balance(io.BytesIO(balance_n_file.getvalue()), balance_n_file.name)
-            balance_n1 = load_balance(io.BytesIO(balance_n1_file.getvalue()), balance_n1_file.name)
+            balance_n = load_balance(
+                io.BytesIO(balance_n_file.getvalue()),
+                balance_n_file.name,
+            )
+            balance_n1 = load_balance(
+                io.BytesIO(balance_n1_file.getvalue()),
+                balance_n1_file.name,
+            )
             results = compare_balances(balance_n, balance_n1)
 
             st.success(f"{len(results)} compte(s) compare(s) avec succes.")
@@ -131,8 +136,8 @@ def render_amortissement_module() -> None:
                     {
                         "REFERENCE": "",
                         "DESIGNATION": "",
-                        "VALEUR ORIGINE": 0,
-
+                        "VALEUR ORIGINE": 0.0,
+                        "DATE ACQUISITION": pd.NaT,
                         "DUREE (ANS)": 5,
                     }
                 ]
@@ -141,7 +146,8 @@ def render_amortissement_module() -> None:
     if uploaded_file is not None:
         try:
             st.session_state["amortissements_editor"] = load_assets_frame(
-                io.BytesIO(uploaded_file.getvalue()), uploaded_file.name
+                io.BytesIO(uploaded_file.getvalue()),
+                uploaded_file.name,
             )
         except Exception as exc:
             st.error(f"Import impossible : {exc}")
@@ -149,7 +155,41 @@ def render_amortissement_module() -> None:
     if "amortissements_editor" not in st.session_state:
         st.session_state["amortissements_editor"] = build_example_frame()
 
+    df = st.session_state["amortissements_editor"].copy()
 
+    expected_columns = [
+        "REFERENCE",
+        "DESIGNATION",
+        "VALEUR ORIGINE",
+        "DATE ACQUISITION",
+        "DUREE (ANS)",
+    ]
+
+    for col in expected_columns:
+        if col not in df.columns:
+            if col in ["REFERENCE", "DESIGNATION"]:
+                df[col] = ""
+            elif col == "DATE ACQUISITION":
+                df[col] = pd.NaT
+            elif col == "DUREE (ANS)":
+                df[col] = 5
+            else:
+                df[col] = 0.0
+
+    df = df[expected_columns].copy()
+
+    df["REFERENCE"] = df["REFERENCE"].fillna("").astype(str)
+    df["DESIGNATION"] = df["DESIGNATION"].fillna("").astype(str)
+    df["VALEUR ORIGINE"] = pd.to_numeric(df["VALEUR ORIGINE"], errors="coerce")
+    df["DUREE (ANS)"] = pd.to_numeric(df["DUREE (ANS)"], errors="coerce")
+    df["DATE ACQUISITION"] = pd.to_datetime(
+        df["DATE ACQUISITION"],
+        errors="coerce",
+        dayfirst=True,
+    )
+
+    editor_frame = st.data_editor(
+        df,
         width="stretch",
         num_rows="dynamic",
         hide_index=True,
@@ -157,8 +197,22 @@ def render_amortissement_module() -> None:
         column_config={
             "REFERENCE": st.column_config.TextColumn("REFERENCE"),
             "DESIGNATION": st.column_config.TextColumn("DESIGNATION"),
-
+            "VALEUR ORIGINE": st.column_config.NumberColumn(
+                "VALEUR ORIGINE",
+                min_value=0.0,
+            ),
+            "DATE ACQUISITION": st.column_config.DateColumn(
+                "DATE ACQUISITION",
+                help="Formats acceptes : YYYY-MM-DD ou JJ/MM/AAAA.",
+                format="DD/MM/YYYY",
+            ),
+            "DUREE (ANS)": st.column_config.NumberColumn(
+                "DUREE (ANS)",
+                min_value=1,
+                step=1,
+            ),
         },
+    )
 
     st.session_state["amortissements_editor"] = editor_frame
 
@@ -169,8 +223,13 @@ def render_amortissement_module() -> None:
             prorata_mode=prorata_mode,
         )
 
-        total_annuite = results_frame[f"ANNUITE {int(reference_year)}"].replace(" ", "", regex=True)
-        total_annuite = total_annuite.str.replace(",", ".", regex=False).str.replace("%", "", regex=False)
+        total_annuite = pd.to_numeric(
+            results_frame[f"ANNUITE {int(reference_year)}"]
+            .astype(str)
+            .str.replace(" ", "", regex=False)
+            .str.replace(",", ".", regex=False),
+            errors="coerce",
+        ).fillna(0)
 
         metric_col1, metric_col2, metric_col3 = st.columns(3)
         with metric_col1:
@@ -180,13 +239,14 @@ def render_amortissement_module() -> None:
         with metric_col3:
             st.metric(
                 "Total annuite",
-                f"{pd.to_numeric(total_annuite, errors='coerce').fillna(0).sum():,.2f}".replace(",", " ").replace(".", ","),
+                f"{total_annuite.sum():,.2f}".replace(",", " ").replace(".", ","),
             )
 
         st.dataframe(results_frame, width="stretch", hide_index=True)
 
         excel_bytes = export_amortissements_excel_bytes(results_frame)
         csv_bytes = export_amortissements_csv_bytes(results_frame)
+
         dl1, dl2 = st.columns(2)
         with dl1:
             st.download_button(
@@ -208,8 +268,9 @@ def render_amortissement_module() -> None:
         )
     except Exception as exc:
         st.warning(f"Le calcul ne peut pas encore etre affiche : {exc}")
-        st.title("Outils comptables Streamlit")
 
+
+st.title("Outils comptables Streamlit")
 st.write(
     "Cette application rassemble plusieurs modules web accessibles a distance depuis un navigateur : comparateur de balances et calculateur d'amortissements."
 )
