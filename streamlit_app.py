@@ -132,7 +132,7 @@ def render_amortissement_module() -> None:
                         "REFERENCE": "",
                         "DESIGNATION": "",
                         "VALEUR ORIGINE": 0,
-                        "DATE ACQUISITION": "",
+                        "DATE ACQUISITION": pd.NaT,
                         "DUREE (ANS)": 5,
                     }
                 ]
@@ -149,8 +149,41 @@ def render_amortissement_module() -> None:
     if "amortissements_editor" not in st.session_state:
         st.session_state["amortissements_editor"] = build_example_frame()
 
+    df = st.session_state["amortissements_editor"].copy()
+
+    colonnes_attendues = [
+        "REFERENCE",
+        "DESIGNATION",
+        "VALEUR ORIGINE",
+        "DATE ACQUISITION",
+        "DUREE (ANS)",
+    ]
+
+    for col in colonnes_attendues:
+        if col not in df.columns:
+            if col in ["REFERENCE", "DESIGNATION"]:
+                df[col] = ""
+            elif col == "DATE ACQUISITION":
+                df[col] = pd.NaT
+            else:
+                df[col] = 0
+
+    df = df[colonnes_attendues]
+
+    df["REFERENCE"] = df["REFERENCE"].fillna("").astype(str)
+    df["DESIGNATION"] = df["DESIGNATION"].fillna("").astype(str)
+    df["VALEUR ORIGINE"] = pd.to_numeric(df["VALEUR ORIGINE"], errors="coerce")
+    df["DUREE (ANS)"] = pd.to_numeric(df["DUREE (ANS)"], errors="coerce")
+
+    if not pd.api.types.is_datetime64_any_dtype(df["DATE ACQUISITION"]):
+        df["DATE ACQUISITION"] = pd.to_datetime(
+            df["DATE ACQUISITION"],
+            errors="coerce",
+            dayfirst=True,
+        )
+
     editor_frame = st.data_editor(
-        st.session_state["amortissements_editor"],
+        df,
         width="stretch",
         num_rows="dynamic",
         hide_index=True,
@@ -158,11 +191,20 @@ def render_amortissement_module() -> None:
         column_config={
             "REFERENCE": st.column_config.TextColumn("REFERENCE"),
             "DESIGNATION": st.column_config.TextColumn("DESIGNATION"),
-            "VALEUR ORIGINE": st.column_config.NumberColumn("VALEUR ORIGINE", min_value=0.0),
-            "DATE ACQUISITION": st.column_config.TextColumn(
-                "DATE ACQUISITION", help="Formats acceptes : YYYY-MM-DD ou JJ/MM/AAAA."
+            "VALEUR ORIGINE": st.column_config.NumberColumn(
+                "VALEUR ORIGINE",
+                min_value=0.0,
             ),
-            "DUREE (ANS)": st.column_config.NumberColumn("DUREE (ANS)", min_value=1, step=1),
+            "DATE ACQUISITION": st.column_config.DateColumn(
+                "DATE ACQUISITION",
+                help="Formats acceptes : YYYY-MM-DD ou JJ/MM/AAAA.",
+                format="DD/MM/YYYY",
+            ),
+            "DUREE (ANS)": st.column_config.NumberColumn(
+                "DUREE (ANS)",
+                min_value=1,
+                step=1,
+            ),
         },
     )
     st.session_state["amortissements_editor"] = editor_frame
@@ -213,15 +255,3 @@ def render_amortissement_module() -> None:
         )
     except Exception as exc:
         st.warning(f"Le calcul ne peut pas encore etre affiche : {exc}")
-
-
-st.title("Outils comptables Streamlit")
-st.write(
-    "Cette application rassemble plusieurs modules web accessibles a distance depuis un navigateur : comparateur de balances et calculateur d'amortissements."
-)
-
-tab1, tab2 = st.tabs(["Amortissements", "Balances"])
-with tab1:
-    render_amortissement_module()
-with tab2:
-    render_balance_module()
