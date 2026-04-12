@@ -159,7 +159,7 @@ def render_amortissement_module() -> None:
             "DESIGNATION": st.column_config.TextColumn("DESIGNATION"),
 
         },
-    )
+    
     st.session_state["amortissements_editor"] = editor_frame
 
     try:
