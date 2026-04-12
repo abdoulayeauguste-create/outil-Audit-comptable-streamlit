@@ -156,7 +156,17 @@ def render_amortissement_module() -> None:
         st.session_state["amortissements_editor"] = build_example_frame()
 
     df = st.session_state["amortissements_editor"].copy()
+# Génération automatique des références si vides
+df["REFERENCE"] = df["REFERENCE"].fillna("").astype(str)
 
+mask = df["REFERENCE"].str.strip() == ""
+
+df.loc[mask, "REFERENCE"] = [
+    f"IMM{str(i+1).zfill(3)}" for i in range(mask.sum())
+]
+
+if mask.any():
+    st.warning("Certaines références étaient vides : elles ont été générées automatiquement.")
     expected_columns = [
         "REFERENCE",
         "DESIGNATION",
