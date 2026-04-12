@@ -221,8 +221,8 @@ def _parse_amount(value: str | float | int | None) -> float:
 def format_amount(value: float) -> str:
     if math.isclose(value, 0.0, abs_tol=1e-12):
         value = 0.0
-    formatted = f"{value:,.2f}"
-    return formatted.replace(",", " ").replace(".", ",")
+    formatted = f"{int(round(value)):,}"
+    return formatted.replace(",", " ")
 
 
 def format_percent(value: float) -> str:
