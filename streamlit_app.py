@@ -132,7 +132,11 @@ def render_amortissement_module() -> None:
                         "REFERENCE": "",
                         "DESIGNATION": "",
                         "VALEUR ORIGINE": 0,
+<<<<<<< HEAD
                         "DATE ACQUISITION": pd.NaT,
+=======
+                        "DATE ACQUISITION": "",
+>>>>>>> 6bc4808d18b264407973abee2f31abb25be9fe75
                         "DUREE (ANS)": 5,
                     }
                 ]
@@ -149,6 +153,7 @@ def render_amortissement_module() -> None:
     if "amortissements_editor" not in st.session_state:
         st.session_state["amortissements_editor"] = build_example_frame()
 
+<<<<<<< HEAD
     df = st.session_state["amortissements_editor"].copy()
 
     colonnes_attendues = [
@@ -184,6 +189,10 @@ def render_amortissement_module() -> None:
 
     editor_frame = st.data_editor(
         df,
+=======
+    editor_frame = st.data_editor(
+        st.session_state["amortissements_editor"],
+>>>>>>> 6bc4808d18b264407973abee2f31abb25be9fe75
         width="stretch",
         num_rows="dynamic",
         hide_index=True,
@@ -191,6 +200,7 @@ def render_amortissement_module() -> None:
         column_config={
             "REFERENCE": st.column_config.TextColumn("REFERENCE"),
             "DESIGNATION": st.column_config.TextColumn("DESIGNATION"),
+<<<<<<< HEAD
             "VALEUR ORIGINE": st.column_config.NumberColumn(
                 "VALEUR ORIGINE",
                 min_value=0.0,
@@ -205,6 +215,13 @@ def render_amortissement_module() -> None:
                 min_value=1,
                 step=1,
             ),
+=======
+            "VALEUR ORIGINE": st.column_config.NumberColumn("VALEUR ORIGINE", min_value=0.0),
+            "DATE ACQUISITION": st.column_config.TextColumn(
+                "DATE ACQUISITION", help="Formats acceptes : YYYY-MM-DD ou JJ/MM/AAAA."
+            ),
+            "DUREE (ANS)": st.column_config.NumberColumn("DUREE (ANS)", min_value=1, step=1),
+>>>>>>> 6bc4808d18b264407973abee2f31abb25be9fe75
         },
     )
     st.session_state["amortissements_editor"] = editor_frame
