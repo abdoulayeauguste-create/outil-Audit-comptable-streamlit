@@ -159,7 +159,7 @@ def render_amortissement_module() -> None:
             "DESIGNATION": st.column_config.TextColumn("DESIGNATION"),
 
         },
-    
+
     st.session_state["amortissements_editor"] = editor_frame
 
     try:
@@ -208,3 +208,16 @@ def render_amortissement_module() -> None:
         )
     except Exception as exc:
         st.warning(f"Le calcul ne peut pas encore etre affiche : {exc}")
+        st.title("Outils comptables Streamlit")
+
+st.write(
+    "Cette application rassemble plusieurs modules web accessibles a distance depuis un navigateur : comparateur de balances et calculateur d'amortissements."
+)
+
+tab1, tab2 = st.tabs(["Amortissements", "Balances"])
+
+with tab1:
+    render_amortissement_module()
+
+with tab2:
+    render_balance_module()
