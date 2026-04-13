@@ -1,9 +1,10 @@
-import streamlit as st
-import pandas as pd
 import re
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 from io import BytesIO
+
+import pandas as pd
+import streamlit as st
+from dateutil.relativedelta import relativedelta
 
 
 def parse_anciennete(value):
@@ -15,14 +16,13 @@ def parse_anciennete(value):
 
     text = str(value).lower().strip().replace(",", ".")
 
-    # Cas d'un nombre écrit en texte : "5.5"
     try:
         return float(text)
     except ValueError:
         pass
 
-    years = 0
-    months = 0
+    years = 0.0
+    months = 0.0
 
     year_match = re.search(r"(\d+(?:\.\d+)?)\s*an", text)
     month_match = re.search(r"(\d+(?:\.\d+)?)\s*mois", text)
@@ -32,11 +32,15 @@ def parse_anciennete(value):
     if month_match:
         months = float(month_match.group(1))
 
-    return years + months / 12
+    return years + (months / 12)
 
 
 def calculate_anciennete_from_date(date_entree, date_ref):
     if pd.isna(date_entree):
+        return 0.0
+
+    entry_date = pd.to_datetime(date_entree, errors="coerce", dayfirst=True)
+    if pd.isna(entry_date):
         return 0.0
 
     if isinstance(date_ref, datetime):
@@ -44,12 +48,8 @@ def calculate_anciennete_from_date(date_entree, date_ref):
     else:
         ref_date = date_ref
 
-    entry_date = pd.to_datetime(date_entree, errors="coerce")
-    if pd.isna(entry_date):
-        return 0.0
-
     delta = relativedelta(ref_date, entry_date.date())
-    return delta.years + delta.months / 12 + delta.days / 365.25
+    return delta.years + (delta.months / 12) + (delta.days / 365.25)
 
 
 def calculate_ir(sgmm, anc):
@@ -59,7 +59,7 @@ def calculate_ir(sgmm, anc):
     sgmm = float(sgmm)
     anc = float(anc)
 
-    if anc <= 0 or sgmm < 0:
+    if sgmm < 0 or anc <= 0:
         return 0.0
 
     if anc <= 5:
@@ -75,6 +75,24 @@ def calculate_ir(sgmm, anc):
     return max(ir, 0.0)
 
 
+def format_number(x):
+    if pd.isna(x) or x is None:
+        return ""
+    try:
+        return f"{round(float(x)):,}".replace(",", " ")
+    except Exception:
+        return ""
+
+
+def find_column(df, possible_names):
+    columns_map = {str(col).upper().strip(): col for col in df.columns}
+    for name in possible_names:
+        normalized_name = name.upper().strip()
+        if normalized_name in columns_map:
+            return columns_map[normalized_name]
+    return None
+
+
 def to_excel(df):
     output = BytesIO()
 
@@ -83,27 +101,15 @@ def to_excel(df):
 
         worksheet = writer.sheets["RESULTAT"]
 
-        # Ajustement simple de la largeur des colonnes
-        for col_idx, col_name in enumerate(df.columns, start=1):
+        for idx, column in enumerate(df.columns, start=1):
+            column_letter = worksheet.cell(row=1, column=idx).column_letter
             max_length = max(
-                len(str(col_name)),
-                df[col_name].astype(str).map(len).max() if not df.empty else 0,
+                len(str(column)),
+                df[column].astype(str).map(len).max() if not df.empty else 0,
             )
-            worksheet.column_dimensions[
-                chr(64 + col_idx) if col_idx <= 26 else "A"
-            ].width = min(max_length + 2, 25)
+            worksheet.column_dimensions[column_letter].width = min(max_length + 2, 30)
 
     return output.getvalue()
-
-
-def find_column(df, possible_names):
-    normalized_columns = {col.upper().strip(): col for col in df.columns}
-
-    for name in possible_names:
-        if name.upper().strip() in normalized_columns:
-            return normalized_columns[name.upper().strip()]
-
-    return None
 
 
 def render_provision_retraite_app():
@@ -126,13 +132,11 @@ def render_provision_retraite_app():
         return
 
     if df.empty:
-        st.error("Le fichier importe est vide.")
+        st.error("Le fichier importé est vide.")
         return
 
-    # Uniformisation des noms de colonnes
     df.columns = [str(col).upper().strip() for col in df.columns]
 
-    # Recherche des colonnes
     matricule_col = find_column(df, ["MATRICULE", "MATRICULES"])
     nom_col = find_column(df, ["NOM"])
     prenom_col = find_column(df, ["PRENOM", "PRENOMS"])
@@ -143,16 +147,15 @@ def render_provision_retraite_app():
     provision_client_col = find_column(df, ["PROVISION CLIENT"])
 
     if not date_entree_col and not anciennete_col:
-        st.error("Le fichier doit contenir soit la colonne DATE ENTREE, soit la colonne ANCIENNETE.")
+        st.error("Le fichier doit contenir soit DATE ENTREE, soit ANCIENNETE.")
         return
 
     if not salaire_annuel_col and not salaire_mensuel_col:
-        st.error("Le fichier doit contenir soit la colonne SALAIRE ANNUEL, soit la colonne SALAIRE MENSUEL.")
+        st.error("Le fichier doit contenir soit SALAIRE ANNUEL, soit SALAIRE MENSUEL.")
         return
 
     date_ref = st.date_input("Date de clôture", value=datetime.today())
 
-    # Calcul de l'ancienneté
     if date_entree_col:
         df[date_entree_col] = pd.to_datetime(df[date_entree_col], errors="coerce", dayfirst=True)
         df["ANCIENNETE_CALC"] = df[date_entree_col].apply(
@@ -163,7 +166,6 @@ def render_provision_retraite_app():
         df["ANCIENNETE_CALC"] = df[anciennete_col].apply(parse_anciennete)
         anciennete_output_col = anciennete_col
 
-    # Calcul du salaire mensuel
     if salaire_mensuel_col:
         df[salaire_mensuel_col] = pd.to_numeric(df[salaire_mensuel_col], errors="coerce")
         salary_calc_col = salaire_mensuel_col
@@ -174,23 +176,19 @@ def render_provision_retraite_app():
         salary_calc_col = "SALAIRE MENSUEL CALC"
         salaire_output_col = salaire_annuel_col
 
-    # Provision client
     if provision_client_col:
         df[provision_client_col] = pd.to_numeric(df[provision_client_col], errors="coerce")
     else:
         df["PROVISION CLIENT"] = None
         provision_client_col = "PROVISION CLIENT"
 
-    # Calcul provision recalculée
     df["PROVISION RECALCULEE"] = df.apply(
         lambda row: calculate_ir(row[salary_calc_col], row["ANCIENNETE_CALC"]),
         axis=1,
     )
 
-    # Ecart
     df["ECART"] = df["PROVISION RECALCULEE"] - df[provision_client_col]
 
-    # Construction du résultat final avec seulement les colonnes voulues
     result_columns = []
 
     if matricule_col:
@@ -208,11 +206,24 @@ def render_provision_retraite_app():
 
     result_df = df[result_columns].copy()
 
-    # Format des dates si DATE ENTREE est utilisée
-    if date_entree_col and date_entree_col in result_df.columns:
-        result_df[date_entree_col] = pd.to_datetime(result_df[date_entree_col], errors="coerce").dt.strftime("%d/%m/%Y")
+    if date_entree_col and anciennete_output_col in result_df.columns:
+        result_df[anciennete_output_col] = pd.to_datetime(
+            result_df[anciennete_output_col],
+            errors="coerce"
+        ).dt.strftime("%d/%m/%Y")
 
-    st.success("Calcul termine avec succes.")
+    numeric_cols = [
+        salaire_output_col,
+        provision_client_col,
+        "PROVISION RECALCULEE",
+        "ECART",
+    ]
+
+    for col in numeric_cols:
+        if col in result_df.columns:
+            result_df[col] = result_df[col].apply(format_number)
+
+    st.success("Calcul terminé avec succès.")
     st.dataframe(result_df, width="stretch", hide_index=True)
 
     excel_data = to_excel(result_df)
