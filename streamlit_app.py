@@ -18,7 +18,7 @@ from balance_core import (
     export_results_excel_bytes as export_balance_excel_bytes,
     load_balance,
 )
-
+from provision_retraite_module import render_provision_retraite_app
 st.set_page_config(page_title="Outils comptables Streamlit", layout="wide")
 
 
@@ -290,13 +290,19 @@ def render_amortissement_module() -> None:
 
 st.title("Outils comptables Streamlit")
 st.write(
-    "Cette application rassemble plusieurs modules web accessibles a distance depuis un navigateur : comparateur de balances et calculateur d'amortissements."
+    "Cette application rassemble plusieurs modules web accessibles a distance depuis un navigateur : Amortissements, variations N/N-1 et provision retraite."
 )
 
-tab1, tab2 = st.tabs(["Amortissements", "Balances"])
-
+tab1, tab2, tab3 = st.tabs([
+    "📊 AMORTISSEMENTS",
+    "📈 VARIATIONS",
+    "💰 PROVISION RETRAITE"
+])
 with tab1:
     render_amortissement_module()
 
 with tab2:
     render_balance_module()
+
+with tab3:
+    render_provision_retraite_app()
