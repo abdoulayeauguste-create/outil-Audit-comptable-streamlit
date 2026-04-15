@@ -19,6 +19,12 @@ from balance_core import (
     load_balance,
 )
 from provision_retraite_module import render_provision_retraite_app
+from core.gl_to_compte_ex import (
+    lire_liste_comptes,
+    extraire_gl_sari_sage,
+    generer_excel_compte_ex,
+)
+
 st.set_page_config(page_title="Outils comptables Streamlit", layout="wide")
 
 
@@ -188,7 +194,6 @@ def render_amortissement_module() -> None:
         dayfirst=True,
     )
 
-    # Generation automatique des references si vides
     mask = df["REFERENCE"].str.strip() == ""
     if mask.any():
         existing_refs = set(df.loc[~mask, "REFERENCE"].astype(str).str.strip())
@@ -290,14 +295,16 @@ def render_amortissement_module() -> None:
 
 st.title("Outils comptables Streamlit")
 st.write(
-    "Cette application rassemble plusieurs modules web accessibles a distance depuis un navigateur : Amortissements, variations N/N-1 et provision retraite."
+    "Cette application rassemble plusieurs modules web accessibles a distance depuis un navigateur : Amortissements, variations N/N-1, provision retraite et extraction GL vers COMPTE EX."
 )
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📊 AMORTISSEMENTS",
     "📈 VARIATIONS",
-    "💰 PROVISION RETRAITE"
+    "💰 PROVISION RETRAITE",
+    "📁 GL vers COMPTE EX",
 ])
+
 with tab1:
     render_amortissement_module()
 
@@ -306,3 +313,64 @@ with tab2:
 
 with tab3:
     render_provision_retraite_app()
+
+with tab4:
+    import os
+    import tempfile
+
+    st.subheader("Extraction GL vers COMPTE EX")
+
+    fichier_gl = st.file_uploader(
+        "Importer le grand livre SARI SAGE",
+        type=["xlsx"],
+        key="gl",
+    )
+
+    fichier_comptes = st.file_uploader(
+        "Importer la liste des comptes (avec éventuellement la colonne SOLDE BG)",
+        type=["xlsx"],
+        key="comptes",
+    )
+
+    fichier_modele = st.file_uploader(
+        "Importer le modèle Excel de feuille COMPTE EX (optionnel)",
+        type=["xlsx"],
+        key="modele_compte_ex",
+    )
+
+    if st.button("Générer COMPTE EX", key="btn_compte_ex"):
+        if fichier_gl is None or fichier_comptes is None:
+            st.error("Veuillez importer le grand livre et la liste des comptes.")
+        else:
+            try:
+                comptes = lire_liste_comptes(fichier_comptes)
+                resultats = extraire_gl_sari_sage(fichier_gl, comptes)
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+                    chemin_sortie = tmp.name
+
+                modele_a_utiliser = (
+                    fichier_modele if fichier_modele is not None else "templates/MODELE.xlsx"
+                )
+
+                generer_excel_compte_ex(
+                    resultats=resultats,
+                    chemin_sortie=chemin_sortie,
+                    modele=modele_a_utiliser,
+                )
+
+                with open(chemin_sortie, "rb") as f:
+                    contenu = f.read()
+
+                st.success("Fichier généré avec succès.")
+                st.download_button(
+                    label="📥 Télécharger le fichier Excel",
+                    data=contenu,
+                    file_name="compte_ex.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+
+                os.remove(chemin_sortie)
+
+            except Exception as e:
+                st.error(f"Erreur : {e}")
